@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corpus — Painel de Custos de Suspensão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script>
+  // Carrega o Chart.js tentando múltiplos CDNs em sequência, com fallback.
+  function loadScript(src){
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => resolve(src);
+      s.onerror = () => reject(new Error('Falha ao carregar ' + src));
+      document.head.appendChild(s);
+    });
+  }
+  async function loadChartJs(){
+    const sources = [
+      'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
+      'https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js'
+    ];
+    for(const src of sources){
+      try { await loadScript(src); if(window.Chart) return true; } catch(e) { /* tenta o próximo */ }
+    }
+    return false;
+  }
+  window.__chartJsReady = loadChartJs();
+</script>
+<style>
+  :root{
+    --bg: #f4f6f5;
+    --panel: #ffffff;
+    --line: #e4e8e6;
+    --text: #1c2521;
+    --text-dim: #6b7570;
+    --green: #2e8b46;
+    --green-dark: #1f6633;
+    --pesqueiro: #c0392b;
+    --pesqueiro-bg: #fbeae8;
+    --vmara: #1f7a8c;
+    --vmara-bg: #e8f4f6;
+    --shadow: 0 1px 2px rgba(20,30,25,0.05), 0 1px 8px rgba(20,30,25,0.04);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif;}
+  .wrap{max-width:1220px; margin:0 auto; padding:0 24px 70px;}
+
+  /* ---- header ---- */
+  header{
+    background:var(--panel); border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between; gap:24px;
+    padding:16px 24px; flex-wrap:wrap; margin-bottom:22px;
+  }
+  .brand{display:flex; align-items:center; gap:14px;}
+  .brand-text h1{font-family:'Inter',sans-serif; font-weight:700; font-size:20px; letter-spacing:-0.01em;}
+  .brand-text .tagline{font-size:11px; color:var(--text-dim); letter-spacing:0.03em;}
+  .divider{width:1px; height:34px; background:var(--line); margin:0 4px;}
+  .page-title h2{font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:24px; text-transform:uppercase; letter-spacing:0.01em;}
+  .page-title .sub{font-size:12px; color:var(--text-dim);}
+  .updated-tag{font-size:11px; color:var(--text-dim); font-style:italic; white-space:nowrap;}
+
+  /* ---- filter bar ---- */
+  .filter-bar{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow);
+    padding:16px 20px; display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:28px;
+  }
+  .filter-bar .fb-label{font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); font-weight:600; display:flex; align-items:center; gap:6px;}
+  .filter-group{display:flex; align-items:center; gap:8px;}
+  .filter-group label{font-size:12px; color:var(--text-dim); font-weight:500;}
+  select{
+    font-family:'Inter',sans-serif; font-size:13px; font-weight:500; color:var(--text);
+    background:#fafcfb; border:1px solid var(--line); border-radius:6px; padding:7px 12px;
+    cursor:pointer; outline:none; min-width:110px;
+  }
+  select:focus{border-color:var(--green);}
+  .reset-btn{
+    margin-left:auto; font-size:12px; color:var(--green-dark); font-weight:600; background:none; border:1px solid var(--green);
+    border-radius:6px; padding:7px 14px; cursor:pointer; transition:background .15s;
+  }
+  .reset-btn:hover{background:#eaf5ec;}
+  .filter-active-note{font-size:12px; color:var(--green-dark); background:#eaf5ec; border:1px solid #cbe8d1; padding:6px 12px; border-radius:6px; display:none;}
+  .filter-active-note.show{display:inline-block;}
+
+  /* ---- section labels ---- */
+  .section-label{display:flex; align-items:center; gap:12px; margin:36px 0 16px;}
+  .section-label .n{
+    font-family:'JetBrains Mono',monospace; font-size:11px; color:#fff; background:var(--green);
+    width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:5px; font-weight:700;
+  }
+  .section-label span.txt{font-family:'Barlow Condensed',sans-serif; font-size:20px; text-transform:uppercase; letter-spacing:0.02em; font-weight:600;}
+  .section-label .line{flex:1; height:1px; background:var(--line);}
+  .section-label .tag{font-family:'JetBrains Mono',monospace; font-size:10.5px; background:#eef1f0; color:var(--text-dim); padding:3px 9px; border-radius:4px;}
+  .section-label .tag.closed{background:#eaf5ec; color:var(--green-dark);}
+
+  /* ---- KPI cards ---- */
+  .kpi-row{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .kpi-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow);
+    padding:20px 22px; transition:opacity .2s;
+  }
+  .kpi-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
+  .base-name{font-family:'Barlow Condensed',sans-serif; font-size:19px; font-weight:600; text-transform:uppercase; display:flex; align-items:center; gap:8px;}
+  .base-dot{width:9px; height:9px; border-radius:50%;}
+  .kpi-card.pesqueiro .base-dot{background:var(--pesqueiro);}
+  .kpi-card.vmara .base-dot{background:var(--vmara);}
+  .kpi-card.pesqueiro{border-top:3px solid var(--pesqueiro);}
+  .kpi-card.vmara{border-top:3px solid var(--vmara);}
+  .kpi-value{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:30px;}
+  .kpi-meta{display:flex; justify-content:space-between; margin-top:10px; font-size:12px; color:var(--text-dim);}
+  .kpi-meta .share{font-family:'JetBrains Mono',monospace; color:var(--text); font-weight:600;}
+
+  .grand-total-bar{
+    margin-top:16px; background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow);
+    padding:16px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;
+  }
+  .grand-total-bar .label{font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em;}
+  .grand-total-bar .value{font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:700; color:var(--green-dark);}
+  .stackbar{height:9px; border-radius:5px; overflow:hidden; display:flex; width:260px; max-width:100%; background:#eef1f0;}
+  .stackbar div{height:100%;}
+  .empty-msg{font-size:12px; color:var(--text-dim); font-style:italic;}
+
+  /* ---- charts ---- */
+  .chart-panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:20px;}
+  .chart-grid{display:grid; grid-template-columns:1fr 1.3fr; gap:16px;}
+  .chart-title{font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:14px; font-weight:600;}
+
+  /* ---- quarter table ---- */
+  .table-panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); overflow:hidden;}
+  table{width:100%; border-collapse:collapse;}
+  thead th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.05em;
+    color:var(--text-dim); padding:13px 20px; border-bottom:1px solid var(--line); background:#fafbfa; font-weight:600;
+  }
+  thead th:not(:first-child), tbody td:not(:first-child){text-align:right;}
+  tbody td{padding:15px 20px; border-bottom:1px solid var(--line); font-size:14px;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody td:first-child{display:flex; align-items:center; gap:9px; font-family:'Barlow Condensed',sans-serif; font-size:17px; font-weight:600; text-transform:uppercase;}
+  .row-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+  tbody td.num{font-family:'JetBrains Mono',monospace;}
+  tbody tr.km-row td{color:var(--text-dim); font-style:italic; background:#fafbfa;}
+  tbody tr.km-row td.num{color:var(--vmara); font-style:normal;}
+  tbody tr.total-row td{background:#eaf5ec; font-weight:700; color:var(--green-dark);}
+
+  footer{margin-top:44px; padding-top:16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--text-dim); display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+  footer .note{font-family:'JetBrains Mono',monospace;}
+
+  /* ---- pivot table: custo por placa e fornecedor ---- */
+  .table-scroll{max-height:620px; overflow-y:auto;}
+  .table-scroll table thead th{position:sticky; top:0; z-index:2;}
+  tr.tipo-row td{
+    background:#f2f6f3; font-weight:700; cursor:pointer; user-select:none;
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  }
+  tr.tipo-row td:first-child{font-family:'Barlow Condensed',sans-serif; font-size:15.5px; text-transform:uppercase; letter-spacing:0.02em;}
+  tr.tipo-row .toggle-icon{
+    display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px;
+    border:1px solid var(--text-dim); border-radius:3px; font-size:10px; margin-right:8px; color:var(--text-dim);
+    transition:transform .15s;
+  }
+  tr.tipo-row.collapsed .toggle-icon{transform:rotate(-90deg);}
+  tr.placa-row td:first-child{padding-left:38px; font-weight:400; font-size:13.5px; color:var(--text); font-family:'JetBrains Mono',monospace; text-transform:none;}
+  tr.placa-row td.num{font-size:13px;}
+  tr.placa-row.hidden{display:none;}
+  tbody tr.grand-total-row td{background:#eaf5ec; font-weight:700; color:var(--green-dark); border-top:2px solid #cbe8d1;}
+  .pivot-empty-cell{color:#c7cdc9;}
+
+  /* ---- rank charts ---- */
+  .rank-controls{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
+  .rank-controls label{font-size:12px; color:var(--text-dim);}
+  .rank-controls select{min-width:90px;}
+  .rank-wrap{position:relative; width:100%;}
+
+  @media (max-width:760px){
+    .kpi-row{grid-template-columns:1fr;}
+    .chart-grid{grid-template-columns:1fr;}
+    header{flex-direction:column; align-items:flex-start;}
+    thead th:nth-child(3), tbody td:nth-child(3){display:none;}
+    .filter-bar{gap:12px;}
+    .reset-btn{margin-left:0;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="42" height="42" viewBox="0 0 42 42" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="21" cy="21" r="19" fill="none" stroke="#dfe7e2" stroke-width="1.5"/>
+      <path d="M 21 4 A 17 17 0 1 1 5.8 30.5" fill="none" stroke="#2e8b46" stroke-width="4.2" stroke-linecap="round"/>
+      <path d="M 21 9.5 A 11.5 11.5 0 1 0 30.6 26.2" fill="none" stroke="#7bc290" stroke-width="4.2" stroke-linecap="round"/>
+      <circle cx="21" cy="21" r="4.4" fill="#1f6633"/>
+    </svg>
+    <div class="brand-text">
+      <h1>CORPUS</h1>
+      <div class="tagline">Saneamento e Obras Ltda</div>
+    </div>
+    <div class="divider"></div>
+    <div class="page-title">
+      <h2>Painel de Custos — Suspensão / Mola</h2>
+      <div class="sub">Frota &middot; comparativo entre bases</div>
+    </div>
+  </div>
+  <div class="updated-tag">Atualizado em: <span id="data-max-tag">—</span> &middot; fonte: aba "Base 2024"</div>
+</header>
+
+<div class="wrap">
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <span class="fb-label">🔍 Filtros</span>
+    <div class="filter-group">
+      <label>Mês</label>
+      <select id="f-mes"></select>
+    </div>
+    <div class="filter-group">
+      <label>Ano</label>
+      <select id="f-ano"></select>
+    </div>
+    <div class="filter-group">
+      <label>Base</label>
+      <select id="f-base"></select>
+    </div>
+    <span class="filter-active-note" id="filter-note"></span>
+    <button class="reset-btn" id="reset-filters">Limpar filtros</button>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section-label"><span class="n">1</span><span class="txt">Custo total por base</span><span class="tag" id="scope-tag">Todo o período</span><span class="line"></span></div>
+
+  <div class="kpi-row" id="kpi-row"></div>
+
+  <div class="grand-total-bar">
+    <div>
+      <div class="label">Custo total no filtro selecionado</div>
+      <div class="value" id="grand-total">—</div>
+    </div>
+    <div class="stackbar" id="stackbar"></div>
+  </div>
+
+  <div class="chart-grid" style="margin-top:20px;">
+    <div class="chart-panel">
+      <div class="chart-title">Comparativo de custo (filtro atual)</div>
+      <canvas id="barChart" height="220"></canvas>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-title">Evolução mensal de custo — últimos 6 meses fechados</div>
+      <canvas id="lineChart" height="220"></canvas>
+    </div>
+  </div>
+
+  <!-- SECTION 2 -->
+  <div class="section-label"><span class="n">2</span><span class="txt">Último trimestre fechado + Km rodado</span><span class="tag closed" id="quarter-badge"></span><span class="line"></span></div>
+
+  <div class="table-panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Base</th>
+          <th>Custo no trimestre</th>
+          <th>Veículos atendidos</th>
+          <th>Km rodado no trimestre</th>
+          <th>Custo por km</th>
+        </tr>
+      </thead>
+      <tbody id="quarter-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 3 -->
+  <div class="section-label"><span class="n">3</span><span class="txt">Custo por Placa e Fornecedor</span><span class="tag">agrupado por implemento</span><span class="line"></span></div>
+
+  <div class="table-panel">
+    <div class="table-scroll">
+      <table id="pivot-table">
+        <thead><tr id="pivot-thead-row"></tr></thead>
+        <tbody id="pivot-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SECTION 4 -->
+  <div class="section-label"><span class="n">4</span><span class="txt">Rank de custo por placa</span><span class="tag" id="rank-placa-count-tag"></span><span class="line"></span></div>
+
+  <div class="chart-panel">
+    <div class="rank-controls">
+      <label>Mostrar</label>
+      <select id="rank-top-n">
+        <option value="10">Top 10</option>
+        <option value="20" selected>Top 20</option>
+        <option value="30">Top 30</option>
+        <option value="9999">Todas as placas</option>
+      </select>
+      <span style="font-size:12px; color:var(--text-dim);">— barras com número de ocorrências ao lado</span>
+    </div>
+    <div class="rank-wrap"><canvas id="rankPlacaChart"></canvas></div>
+  </div>
+
+  <!-- SECTION 5 -->
+  <div class="section-label"><span class="n">5</span><span class="txt">Rank de custo por implemento</span><span class="line"></span></div>
+
+  <div class="chart-panel">
+    <div class="rank-wrap"><canvas id="rankTipoChart"></canvas></div>
+  </div>
+
+  <footer>
+    <span>Fonte: Pedidos_Compra_Moleiros.xlsx — aba "Base 2024" (demais abas ignoradas)</span>
+    <span class="note" id="row-note">—</span>
+  </footer>
+
+</div>
+
+<script>
+const DATA = __DATA_JSON__;
+
+const COLORS = { "Pesqueiro": "#c0392b", "V.Mara": "#1f7a8c" };
+const CLASS  = { "Pesqueiro": "pesqueiro", "V.Mara": "vmara" };
+const MESES  = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+const fmtBRL  = n => n.toLocaleString('pt-BR', {style:'currency', currency:'BRL', maximumFractionDigits:0});
+const fmtBRLc = n => n.toLocaleString('pt-BR', {style:'currency', currency:'BRL', minimumFractionDigits:2});
+const fmtKm   = n => n.toLocaleString('pt-BR', {maximumFractionDigits:0}) + ' km';
+const fmtDate = s => { const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; };
+
+document.getElementById('data-max-tag').textContent = fmtDate(DATA.data_max_date);
+document.getElementById('quarter-badge').textContent = DATA.quarter_label;
+document.getElementById('row-note').textContent =
+  `${DATA.total_cost_rows.toLocaleString('pt-BR')} lançamentos de custo considerados — ${DATA.total_km_rows.toLocaleString('pt-BR')} linhas de km rodado ignoradas do cálculo`;
+
+// ---- popular selects ----
+const selMes = document.getElementById('f-mes');
+const selAno = document.getElementById('f-ano');
+const selBase = document.getElementById('f-base');
+
+selMes.innerHTML = '<option value="Todos">Todos os meses</option>' +
+  MESES.map((m,i) => `<option value="${i+1}">${m}</option>`).join('');
+selAno.innerHTML = '<option value="Todos">Todos os anos</option>' +
+  DATA.anos_disponiveis.map(a => `<option value="${a}">${a}</option>`).join('');
+selBase.innerHTML = '<option value="Todos">Todas as bases</option>' +
+  DATA.bases.map(b => `<option value="${b}">${b}</option>`).join('');
+
+let charts = {};
+
+function currentFilters(){
+  return { mes: selMes.value, ano: selAno.value, base: selBase.value };
+}
+
+function filteredRows(){
+  const f = currentFilters();
+  return DATA.cost_rows.filter(r =>
+    (f.mes === 'Todos' || r.mes === parseInt(f.mes)) &&
+    (f.ano === 'Todos' || r.ano === parseInt(f.ano)) &&
+    (f.base === 'Todos' || r.base === f.base)
+  );
+}
+
+function activeBases(){
+  const f = currentFilters();
+  return f.base === 'Todos' ? DATA.bases : [f.base];
+}
+
+function render(){
+  const f = currentFilters();
+  const rows = filteredRows();
+  const bases = activeBases();
+
+  // scope tag
+  const parts = [];
+  if(f.mes !== 'Todos') parts.push(MESES[parseInt(f.mes)-1]);
+  if(f.ano !== 'Todos') parts.push(f.ano);
+  if(f.base !== 'Todos') parts.push(f.base);
+  document.getElementById('scope-tag').textContent = parts.length ? parts.join(' · ') : 'Todo o período';
+
+  const note = document.getElementById('filter-note');
+  if(parts.length){ note.textContent = 'Filtro ativo: ' + parts.join(' · '); note.classList.add('show'); }
+  else { note.classList.remove('show'); }
+
+  // totals
+  const totalByBase = {};
+  bases.forEach(b => totalByBase[b] = 0);
+  rows.forEach(r => { totalByBase[r.base] = (totalByBase[r.base]||0) + r.valor; });
+  const grandTotal = bases.reduce((s,b) => s + (totalByBase[b]||0), 0);
+
+  // KPI cards
+  const kpiRow = document.getElementById('kpi-row');
+  kpiRow.innerHTML = '';
+  if(rows.length === 0){
+    kpiRow.innerHTML = '<div class="empty-msg" style="grid-column:1/-1;">Nenhum lançamento de custo encontrado para esse filtro.</div>';
+  } else {
+    bases.forEach(base => {
+      const cost = totalByBase[base] || 0;
+      const pct = grandTotal > 0 ? (cost/grandTotal*100).toFixed(1) : '0.0';
+      const card = document.createElement('div');
+      card.className = `kpi-card ${CLASS[base]}`;
+      card.innerHTML = `
+        <div class="kpi-top"><div class="base-name"><span class="base-dot"></span>${base}</div></div>
+        <div class="kpi-value">${fmtBRLc(cost)}</div>
+        <div class="kpi-meta"><span>participação no total filtrado</span><span class="share">${pct}%</span></div>`;
+      kpiRow.appendChild(card);
+    });
+  }
+
+  document.getElementById('grand-total').textContent = grandTotal > 0 ? fmtBRLc(grandTotal) : 'R$ 0,00';
+  const stackbar = document.getElementById('stackbar');
+  stackbar.innerHTML = '';
+  if(grandTotal > 0){
+    bases.forEach(base => {
+      const pct = (totalByBase[base]||0) / grandTotal * 100;
+      if(pct <= 0) return;
+      const seg = document.createElement('div');
+      seg.style.width = pct + '%';
+      seg.style.background = COLORS[base];
+      stackbar.appendChild(seg);
+    });
+  }
+
+  // bar chart
+  if(window.Chart && document.getElementById('barChart')){
+  if(charts.bar) charts.bar.destroy();
+  charts.bar = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: bases,
+      datasets: [{
+        data: bases.map(b => totalByBase[b] || 0),
+        backgroundColor: bases.map(b => COLORS[b]),
+        borderRadius: 4,
+        maxBarThickness: 90
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend:{display:false}, tooltip:{ callbacks:{ label: ctx => fmtBRLc(ctx.parsed.y) } } },
+      scales: {
+        y: { ticks:{ callback:v=>fmtBRL(v) }, grid:{ color:'#eef1f0' } },
+        x: { grid:{ display:false }, ticks:{ font:{ family:"'Barlow Condensed', sans-serif", size:15 } } }
+      }
+    }
+  });
+
+  // line chart (fixed 6 closed months, only respects base filter)
+  if(charts.line) charts.line.destroy();
+  charts.line = new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels: DATA.monthly_labels,
+      datasets: bases.map(b => ({
+        label: b,
+        data: DATA.monthly_cost[b] || DATA.monthly_labels.map(()=>0),
+        borderColor: COLORS[b],
+        backgroundColor: COLORS[b] + '1f',
+        tension: 0.35,
+        fill: true,
+        pointRadius: 3,
+        pointBackgroundColor: COLORS[b]
+      }))
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position:'top', labels:{ boxWidth:10, usePointStyle:true } },
+        tooltip: { callbacks:{ label: ctx => `${ctx.dataset.label}: ${fmtBRLc(ctx.parsed.y)}` } }
+      },
+      scales: {
+        y: { ticks:{ callback:v=>fmtBRL(v) }, grid:{ color:'#eef1f0' } },
+        x: { grid:{ display:false } }
+      }
+    }
+  });
+  } // fim if(window.Chart) para bar/line
+
+  // quarter table (fixed period, respects base filter only)
+  const tbody = document.getElementById('quarter-tbody');
+  tbody.innerHTML = '';
+  let totalQCost = 0, totalQKm = 0, totalQVeic = 0;
+  bases.forEach(base => {
+    const cost = DATA.quarter_cost[base] || 0;
+    const km = DATA.quarter_km[base] || 0;
+    const veic = DATA.quarter_vehicles[base] || 0;
+    const custoKm = km > 0 ? cost/km : 0;
+    totalQCost += cost; totalQKm += km; totalQVeic += veic;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="row-dot" style="background:${COLORS[base]}"></span>${base}</td>
+      <td class="num">${fmtBRLc(cost)}</td>
+      <td class="num">${veic}</td>
+      <td class="num">${fmtKm(km)}</td>
+      <td class="num">${custoKm>0 ? fmtBRLc(custoKm)+'/km' : '—'}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  const kmRow = document.createElement('tr');
+  kmRow.className = 'km-row';
+  kmRow.innerHTML = `
+    <td>Km rodado (referência, não é custo)</td>
+    <td class="num">—</td><td class="num">—</td>
+    <td class="num">${fmtKm(totalQKm)}</td><td class="num">—</td>`;
+  tbody.appendChild(kmRow);
+
+  const totalRow = document.createElement('tr');
+  totalRow.className = 'total-row';
+  totalRow.innerHTML = `
+    <td>Total do trimestre</td>
+    <td class="num">${fmtBRLc(totalQCost)}</td>
+    <td class="num">${totalQVeic}</td>
+    <td class="num">${fmtKm(totalQKm)}</td>
+    <td class="num">${totalQKm>0 ? fmtBRLc(totalQCost/totalQKm)+'/km' : '—'}</td>`;
+  tbody.appendChild(totalRow);
+
+  // ================= SECTION 3: pivot custo por Placa x Fornecedor, agrupado por Tipo =================
+  const fornecedores = DATA.fornecedores;
+  const theadRow = document.getElementById('pivot-thead-row');
+  theadRow.innerHTML = '<th>Tipo / Placa</th>' + fornecedores.map(f=>`<th>${f}</th>`).join('') + '<th>Total</th>';
+
+  // estrutura: tipo -> placa -> fornecedor -> soma
+  const pivot = {};
+  rows.forEach(r => {
+    pivot[r.tipo] = pivot[r.tipo] || {};
+    pivot[r.tipo][r.placa] = pivot[r.tipo][r.placa] || {};
+    pivot[r.tipo][r.placa][r.fornecedor] = (pivot[r.tipo][r.placa][r.fornecedor] || 0) + r.valor;
+  });
+
+  // totais por tipo e ordenacao
+  const tipoTotais = Object.keys(pivot).map(tipo => {
+    let total = 0;
+    Object.values(pivot[tipo]).forEach(placaMap => Object.values(placaMap).forEach(v => total += v));
+    return { tipo, total };
+  }).sort((a,b) => b.total - a.total);
+
+  const pivotTbody = document.getElementById('pivot-tbody');
+  pivotTbody.innerHTML = '';
+  const grandTotalByFornecedor = {}; fornecedores.forEach(f => grandTotalByFornecedor[f]=0);
+  let pivotGrandTotal = 0;
+
+  tipoTotais.forEach(({tipo, total}) => {
+    const placas = pivot[tipo];
+    // subtotal do tipo por fornecedor
+    const tipoSubtotalForn = {}; fornecedores.forEach(f => tipoSubtotalForn[f]=0);
+    Object.values(placas).forEach(placaMap => {
+      fornecedores.forEach(f => { tipoSubtotalForn[f] += (placaMap[f]||0); });
+    });
+    fornecedores.forEach(f => grandTotalByFornecedor[f] += tipoSubtotalForn[f]);
+    pivotGrandTotal += total;
+
+    const tipoId = 'tipo-' + tipo.replace(/[^a-zA-Z0-9]/g,'_');
+    const trTipo = document.createElement('tr');
+    trTipo.className = 'tipo-row';
+    trTipo.dataset.target = tipoId;
+    trTipo.innerHTML = `<td><span class="toggle-icon">▾</span>${tipo}</td>` +
+      fornecedores.map(f => `<td class="num">${tipoSubtotalForn[f]>0 ? fmtBRLc(tipoSubtotalForn[f]) : '<span class="pivot-empty-cell">—</span>'}</td>`).join('') +
+      `<td class="num">${fmtBRLc(total)}</td>`;
+    trTipo.addEventListener('click', () => {
+      trTipo.classList.toggle('collapsed');
+      pivotTbody.querySelectorAll(`tr.placa-row[data-tipo="${tipoId}"]`).forEach(tr => tr.classList.toggle('hidden'));
+    });
+    pivotTbody.appendChild(trTipo);
+
+    const placaEntries = Object.entries(placas).map(([placa, fmap]) => {
+      const t = fornecedores.reduce((s,f) => s + (fmap[f]||0), 0);
+      return { placa, fmap, t };
+    }).sort((a,b) => b.t - a.t);
+
+    placaEntries.forEach(({placa, fmap, t}) => {
+      const trPlaca = document.createElement('tr');
+      trPlaca.className = 'placa-row';
+      trPlaca.dataset.tipo = tipoId;
+      trPlaca.innerHTML = `<td>${placa}</td>` +
+        fornecedores.map(f => `<td class="num">${fmap[f] ? fmtBRLc(fmap[f]) : '<span class="pivot-empty-cell">—</span>'}</td>`).join('') +
+        `<td class="num">${fmtBRLc(t)}</td>`;
+      pivotTbody.appendChild(trPlaca);
+    });
+  });
+
+  if(tipoTotais.length === 0){
+    pivotTbody.innerHTML = `<tr><td colspan="${fornecedores.length+2}" class="empty-msg" style="padding:20px;">Nenhum lançamento de custo encontrado para esse filtro.</td></tr>`;
+  } else {
+    const trGrand = document.createElement('tr');
+    trGrand.className = 'grand-total-row';
+    trGrand.innerHTML = `<td>Total geral</td>` +
+      fornecedores.map(f => `<td class="num">${fmtBRLc(grandTotalByFornecedor[f])}</td>`).join('') +
+      `<td class="num">${fmtBRLc(pivotGrandTotal)}</td>`;
+    pivotTbody.appendChild(trGrand);
+  }
+
+  // ================= SECTION 4: rank de custo por Placa (+ ocorrencias) =================
+  const placaAgg = {};
+  rows.forEach(r => {
+    placaAgg[r.placa] = placaAgg[r.placa] || { valor: 0, count: 0 };
+    placaAgg[r.placa].valor += r.valor;
+    placaAgg[r.placa].count += 1;
+  });
+  let placaRank = Object.entries(placaAgg).map(([placa, v]) => ({ placa, valor: v.valor, count: v.count }));
+  placaRank.sort((a,b) => b.valor - a.valor);
+
+  const topNSel = document.getElementById('rank-top-n');
+  const topN = parseInt(topNSel.value);
+  const placaRankShown = placaRank.slice(0, topN);
+  document.getElementById('rank-placa-count-tag').textContent =
+    `${placaRankShown.length} de ${placaRank.length} placas com custo`;
+
+  const rankPlacaEl = document.getElementById('rankPlacaChart');
+  if(rankPlacaEl){
+    rankPlacaEl.parentElement.style.height = Math.max(260, placaRankShown.length * 26 + 50) + 'px';
+  }
+
+  if(window.Chart && document.getElementById('rankPlacaChart')){
+    if(charts.rankPlaca) charts.rankPlaca.destroy();
+    const occLabelPlugin = {
+      id: 'occLabelsPlaca',
+      afterDatasetsDraw(chart){
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.font = "500 11px 'JetBrains Mono', monospace";
+        ctx.fillStyle = '#6b7570';
+        ctx.textBaseline = 'middle';
+        chart.data.labels.forEach((label, i) => {
+          const meta = chart.getDatasetMeta(0);
+          const bar = meta.data[i];
+          if(!bar) return;
+          const c = placaRankShown[i].count;
+          ctx.fillText(`${c} ocorr.`, bar.x + 8, bar.y);
+        });
+        ctx.restore();
+      }
+    };
+    charts.rankPlaca = new Chart(document.getElementById('rankPlacaChart'), {
+      type: 'bar',
+      data: {
+        labels: placaRankShown.map(p => p.placa),
+        datasets: [{
+          data: placaRankShown.map(p => p.valor),
+          backgroundColor: '#2e8b46',
+          borderRadius: 3,
+          maxBarThickness: 18
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { right: 70 } },
+        plugins: {
+          legend: { display:false },
+          tooltip: { callbacks: { label: ctx => {
+            const p = placaRankShown[ctx.dataIndex];
+            return `${fmtBRLc(p.valor)} · ${p.count} ocorrência(s)`;
+          } } }
+        },
+        scales: {
+          x: { ticks:{ callback:v=>fmtBRL(v) }, grid:{ color:'#eef1f0' } },
+          y: { grid:{ display:false }, ticks:{ font:{ family:"'JetBrains Mono', monospace", size:11.5 } } }
+        }
+      },
+      plugins: [occLabelPlugin]
+    });
+  }
+
+  // ================= SECTION 5: rank de custo por Implemento (Tipo) =================
+  const tipoAgg = {};
+  rows.forEach(r => {
+    tipoAgg[r.tipo] = tipoAgg[r.tipo] || { valor: 0, count: 0 };
+    tipoAgg[r.tipo].valor += r.valor;
+    tipoAgg[r.tipo].count += 1;
+  });
+  const tipoRank = Object.entries(tipoAgg).map(([tipo, v]) => ({ tipo, valor: v.valor, count: v.count }))
+    .sort((a,b) => b.valor - a.valor);
+
+  const rankTipoEl = document.getElementById('rankTipoChart');
+  if(rankTipoEl){
+    rankTipoEl.parentElement.style.height = Math.max(260, tipoRank.length * 30 + 50) + 'px';
+  }
+
+  if(window.Chart && document.getElementById('rankTipoChart')){
+    if(charts.rankTipo) charts.rankTipo.destroy();
+    charts.rankTipo = new Chart(document.getElementById('rankTipoChart'), {
+      type: 'bar',
+      data: {
+        labels: tipoRank.map(t => t.tipo),
+        datasets: [{
+          data: tipoRank.map(t => t.valor),
+          backgroundColor: '#1f7a8c',
+          borderRadius: 3,
+          maxBarThickness: 22
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display:false },
+          tooltip: { callbacks: { label: ctx => {
+            const t = tipoRank[ctx.dataIndex];
+            return `${fmtBRLc(t.valor)} · ${t.count} lançamento(s)`;
+          } } }
+        },
+        scales: {
+          x: { ticks:{ callback:v=>fmtBRL(v) }, grid:{ color:'#eef1f0' } },
+          y: { grid:{ display:false }, ticks:{ font:{ family:"'Barlow Condensed', sans-serif", size:14 } } }
+        }
+      }
+    });
+  }
+}
+
+[selMes, selAno, selBase].forEach(s => s.addEventListener('change', render));
+document.getElementById('rank-top-n').addEventListener('change', render);
+document.getElementById('reset-filters').addEventListener('click', () => {
+  selMes.value = 'Todos'; selAno.value = 'Todos'; selBase.value = 'Todos';
+  render();
+});
+
+window.__chartJsReady.then(ok => {
+  if(!ok){
+    document.querySelectorAll('#barChart, #lineChart, #rankPlacaChart, #rankTipoChart').forEach(c => {
+      const msg = document.createElement('div');
+      msg.style.cssText = 'padding:20px;color:#c0392b;font-size:13px;';
+      msg.textContent = 'Não foi possível carregar a biblioteca de gráficos (sem conexão com a internet). Os valores continuam corretos nos cartões e na tabela.';
+      c.replaceWith(msg);
+    });
+  }
+  render();
+});
+</script>
+</body>
+</html>
